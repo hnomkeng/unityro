@@ -3,7 +3,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityRO.GameCamera;
-using static EntityViewer;
+using static SpriteEntityViewer;
 
 internal class RoBrowserFramePaceCalculator : MonoBehaviour, IFramePaceCalculator {
 
@@ -103,9 +103,5 @@ internal class RoBrowserFramePaceCalculator : MonoBehaviour, IFramePaceCalculato
         CurrentMotion = currentMotion;
         NextMotion = nextMotion;
         ActionId = actionId;
-    }
-
-    public void SetMotionSpeedMultiplier(ushort attackMT) {
-        // do nothing
     }
 }

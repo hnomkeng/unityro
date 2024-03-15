@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Rendering;
+using UnityRO.Core.GameEntity;
+using UnityRO.Net;
 using static ZC.NOTIFY_VANISH;
 
 public class Entity : MonoBehaviour, INetworkEntity {
@@ -15,11 +17,12 @@ public class Entity : MonoBehaviour, INetworkEntity {
     private AudioSource AudioSource;
 
     public FramePaceAlgorithm CurrentFramePaceAlgorithm = FramePaceAlgorithm.UnityRO;
+    public EntityType Type = EntityType.UNKNOWN;
+    public GameEntityViewerType EntityViewerType = GameEntityViewerType.SPRITE;
 
     public Action OnParameterUpdated;
     public Action AfterMoveAction;
-    public EntityType Type = EntityType.UNKNOWN;
-    public EntityViewer EntityViewer;
+    public GameEntityViewer EntityViewer;
     public Direction Direction = 0;
     public SortingGroup SortingGroup;
     public float ShadowSize;
@@ -27,7 +30,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
     public int HeadDir;
 
     public bool IsReady = false;
-    public bool HasAuthority => GID == Session.CurrentSession.Entity?.GetEntityGID();
+    public bool HasAuthority => GID == SessionManager.CurrentSession.Entity?.GetEntityGID();
 
     public uint GID;
     public uint AID;
@@ -40,6 +43,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
     private NetworkClient NetworkClient;
     private EntityManager EntityManager;
     private PathFinder PathFinder;
+    private SessionManager SessionManager;
+    
     private EntityCanvas Canvas;
     private Camera MainCamera;
     private LayerMask EntityMask;
@@ -51,6 +56,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
         EntityManager = FindObjectOfType<EntityManager>();
         PathFinder = FindObjectOfType<PathFinder>();
         GameManager = FindObjectOfType<GameManager>();
+        SessionManager = FindObjectOfType<SessionManager>();
+        
         EntityMask = LayerMask.GetMask("NPC", "Monsters", "Characters");
         DamageNumbers = new List<DamageRenderer>();
 
@@ -86,7 +93,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
             Canvas?.HideEntityName();
             return;
         }
-        entityHit.collider.gameObject.TryGetComponent<EntityViewer>(out var target);
+        entityHit.collider.gameObject.TryGetComponent<SpriteEntityViewer>(out var target);
 
         if (didHitAnyEntity && target != null && target.Entity == this) {
             Canvas?.ShowEntityName();
@@ -96,30 +103,30 @@ public class Entity : MonoBehaviour, INetworkEntity {
     }
 
     private void HookPackets() {
-        NetworkClient.HookPacket(ZC.NOTIFY_ACT3.HEADER, OnEntityAction);
-        NetworkClient.HookPacket(ZC.NOTIFY_ACT.HEADER, OnEntityAction);
-        NetworkClient.HookPacket(ZC.PAR_CHANGE.HEADER, OnParameterChange);
-        NetworkClient.HookPacket(ZC.LONGPAR_CHANGE.HEADER, OnParameterChange);
-        NetworkClient.HookPacket(ZC.LONGPAR_CHANGE2.HEADER, OnParameterChange);
-        NetworkClient.HookPacket(ZC.COUPLESTATUS.HEADER, OnParameterChange);
-        NetworkClient.HookPacket(ZC.STATUS.HEADER, OnStatsWindowData);
-        NetworkClient.HookPacket(ZC.NOTIFY_EXP2.HEADER, OnExpReceived);
-        NetworkClient.HookPacket(ZC.SKILLINFO_LIST.HEADER, OnSkillsUpdated);
-        NetworkClient.HookPacket(ZC.SKILLINFO_UPDATE.HEADER, OnSkillsUpdated);
-        NetworkClient.HookPacket(ZC.ATTACK_RANGE.HEADER, OnAttackRangeReceived);
-        NetworkClient.HookPacket(ZC.ACK_TOUSESKILL.HEADER, OnUseSkillResult);
-        NetworkClient.HookPacket(ZC.NOTIFY_SKILL2.HEADER, OnEntityUseSkillToAttack);
-        NetworkClient.HookPacket(ZC.USESKILL_ACK2.HEADER, OnEntityCastSkill);
-        NetworkClient.HookPacket(ZC.ATTACK_FAILURE_FOR_DISTANCE.HEADER, OnAttackFailureForDistance);
+        NetworkClient.HookPacket<ZC.NOTIFY_ACT3>(ZC.NOTIFY_ACT3.HEADER, OnEntityAction);
+        NetworkClient.HookPacket<ZC.NOTIFY_ACT>(ZC.NOTIFY_ACT.HEADER, OnEntityAction);
+        NetworkClient.HookPacket<ZC.PAR_CHANGE>(ZC.PAR_CHANGE.HEADER, OnParameterChange);
+        NetworkClient.HookPacket<ZC.LONGPAR_CHANGE>(ZC.LONGPAR_CHANGE.HEADER, OnParameterChange);
+        NetworkClient.HookPacket<ZC.LONGPAR_CHANGE2>(ZC.LONGPAR_CHANGE2.HEADER, OnParameterChange);
+        NetworkClient.HookPacket<ZC.COUPLESTATUS>(ZC.COUPLESTATUS.HEADER, OnParameterChange);
+        NetworkClient.HookPacket<ZC.STATUS>(ZC.STATUS.HEADER, OnStatsWindowData);
+        NetworkClient.HookPacket<ZC.NOTIFY_EXP2>(ZC.NOTIFY_EXP2.HEADER, OnExpReceived);
+        NetworkClient.HookPacket<ZC.SKILLINFO_LIST>(ZC.SKILLINFO_LIST.HEADER, OnSkillsUpdated);
+        NetworkClient.HookPacket<ZC.SKILLINFO_UPDATE>(ZC.SKILLINFO_UPDATE.HEADER, OnSkillsUpdated);
+        NetworkClient.HookPacket<ZC.ATTACK_RANGE>(ZC.ATTACK_RANGE.HEADER, OnAttackRangeReceived);
+        NetworkClient.HookPacket<ZC.ACK_TOUSESKILL>(ZC.ACK_TOUSESKILL.HEADER, OnUseSkillResult);
+        NetworkClient.HookPacket<ZC.NOTIFY_SKILL2>(ZC.NOTIFY_SKILL2.HEADER, OnEntityUseSkillToAttack);
+        NetworkClient.HookPacket<ZC.USESKILL_ACK2>(ZC.USESKILL_ACK2.HEADER, OnEntityCastSkill);
+        NetworkClient.HookPacket<ZC.ATTACK_FAILURE_FOR_DISTANCE>(ZC.ATTACK_FAILURE_FOR_DISTANCE.HEADER, OnAttackFailureForDistance);
     }
 
-    public void Init(SpriteData spriteData) {
-        EntityViewer.Init(spriteData);
+    public void Init(SpriteData spriteData, Texture2D atlas) {
+        EntityViewer.Init(spriteData, atlas);
     }
 
     public void Init(EntitySpawnData data, int rendererLayer, EntityCanvas canvas) {
         Canvas = canvas;
-        Type = data.job == 45 ? EntityType.WARP : data.objecttype;
+        Type = data.job == 45 ? EntityType.WARP : (EntityType)data.objecttype;
         Direction = ((NpcDirection) data.PosDir[2]).ToDirection();
 
         GID = data.GID;
@@ -157,10 +164,10 @@ public class Entity : MonoBehaviour, INetworkEntity {
             case EntitySpawnData.EntitySpawnState.Stand:
                 break;
             case EntitySpawnData.EntitySpawnState.Sit:
-                ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Sit });
+                ChangeMotion(new MotionRequest { Motion = SpriteMotion.Sit });
                 break;
             case EntitySpawnData.EntitySpawnState.Dead:
-                ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Dead });
+                ChangeMotion(new MotionRequest { Motion = SpriteMotion.Dead });
                 break;
             default:
                 break;
@@ -215,7 +222,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
             Robe = (short) data.chr_slot_changeCnt
         };
 
-        SetupViewer(EquipInfo, rendererLayer);
+        SetupViewer(EquipInfo, rendererLayer, isFromCharacterSelection);
 
         if (isFromCharacterSelection) {
             ShadowSize = 0f;
@@ -223,6 +230,19 @@ public class Entity : MonoBehaviour, INetworkEntity {
         }
 
         HookPackets();
+    }
+
+    public void Clone(Entity entity, int rendererLayer, bool isFromUi = false) {
+        Status = entity.Status;
+        Type = entity.Type;
+        EquipInfo = entity.EquipInfo;
+
+        SetupViewer(EquipInfo, rendererLayer, isFromUi);
+
+        if (isFromUi) {
+            ShadowSize = 0f;
+            return;
+        }
     }
 
     public void SetReady(bool ready, bool isFromCharacterSelection = false) {
@@ -235,11 +255,32 @@ public class Entity : MonoBehaviour, INetworkEntity {
         SetupCanvas();
     }
 
-    private void SetupViewer(EntityEquipInfo data, int rendererLayer) {
+    private void SetupViewer(EntityEquipInfo data, int rendererLayer, bool isFromUi = false) {
         if (EntityViewer != null) {
             Destroy(EntityViewer.gameObject);
         }
 
+        if (EntityViewerType == GameEntityViewerType.SPRITE) {
+            InitSpriteViewer(data, rendererLayer, isFromUi);
+        } else if (EntityViewerType == GameEntityViewerType.MESH) {
+            InitMeshViewer(data, rendererLayer, isFromUi);
+        }
+    }
+
+    private void InitMeshViewer(EntityEquipInfo data, int rendererLayer, bool isFromUi = false) {
+        var body = new GameObject("Body");
+        body.layer = rendererLayer;
+        body.transform.SetParent(gameObject.transform, false);
+        body.transform.localPosition = Vector3.zero;
+
+        var bodyViewer = body.AddComponent<MeshEntityViewer>();
+        bodyViewer.ViewerType = ViewerType.MESH;
+        bodyViewer.Entity = this;
+
+        EntityViewer = bodyViewer;
+    }
+
+    private void InitSpriteViewer(EntityEquipInfo data, int rendererLayer, bool isFromUi = false) {
         var body = new GameObject("Body");
         body.layer = rendererLayer;
         body.transform.SetParent(gameObject.transform, false);
@@ -247,7 +288,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
         SortingGroup = body.AddComponent<SortingGroup>();
         SortingGroup.sortingOrder = 2;
 
-        var bodyViewer = body.AddComponent<EntityViewer>();
+        var bodyViewer = body.AddComponent<SpriteEntityViewer>();
         bodyViewer.ViewerType = ViewerType.BODY;
         bodyViewer.Entity = this;
         bodyViewer.HeadDirection = 0;
@@ -257,13 +298,15 @@ public class Entity : MonoBehaviour, INetworkEntity {
         // Add more options such as sex etc
 
         if (Type == EntityType.WARP) {
-            body.transform.localPosition = new Vector3(0.5f, 0.4f, 0.5f);
+            body.transform.localPosition = new Vector3(0.5f, 0f, 0.5f);
             var warp = body.AddComponent<MapWarpEffect>();
             warp.StartWarp(body);
             return;
         }
 
-        body.AddComponent<Billboard>();
+        if (!isFromUi) {
+            body.AddComponent<Billboard>();
+        }
         // Any other than PC has Head etc
         if (Type != EntityType.PC) {
             return;
@@ -278,23 +321,25 @@ public class Entity : MonoBehaviour, INetworkEntity {
     }
 
     private void SetupCanvas() {
+        Canvas.Init(this);
         Canvas.SetEntityName(Status.name);
         Canvas.SetEntityHP(Status.hp, Status.max_hp);
         Canvas.SetEntitySP(Status.sp, Status.max_sp);
 
         if (HasAuthority) {
-            Canvas.Init(this);
             Canvas.ShowEntityHP();
             Canvas.ShowEntitySP();
+        } else if (Type == EntityType.MOB && Status.hp != Status.max_hp) {
+            Canvas.ShowEntityHP();
         }
     }
 
-    private void InitHead(int rendererLayer, EntityViewer bodyViewer) {
+    private void InitHead(int rendererLayer, SpriteEntityViewer bodyViewer) {
         var head = new GameObject("Head");
         head.layer = rendererLayer;
         head.transform.SetParent(bodyViewer.transform, false);
         head.transform.localPosition = Vector3.zero;
-        var headViewer = head.AddComponent<EntityViewer>();
+        var headViewer = head.AddComponent<SpriteEntityViewer>();
         var sortingGroup = head.AddComponent<SortingGroup>();
         sortingGroup.sortingOrder = 1;
 
@@ -306,7 +351,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
 
     private void MaybeInitLayer(
         int rendererLayer,
-        EntityViewer bodyViewer,
+        SpriteEntityViewer bodyViewer,
         int viewId,
         ViewerType viewerType,
         int spriteOrder = 2
@@ -318,7 +363,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
             layerObject.transform.SetParent(bodyViewer.transform, false);
             layerObject.transform.localPosition = Vector3.zero;
 
-            var layerViewer = layerObject.AddComponent<EntityViewer>();
+            var layerViewer = layerObject.AddComponent<SpriteEntityViewer>();
             var sortingGroup = layerObject.AddComponent<SortingGroup>();
             sortingGroup.sortingOrder = spriteOrder;
 
@@ -327,6 +372,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
             layerViewer.ViewerType = viewerType;
 
             bodyViewer.Children.Add(layerViewer);
+        } else if (viewer != null) {
+            viewer.gameObject.SetActive(true);
         } else if (viewId == 0) {
             viewer?.gameObject.SetActive(false);
         }
@@ -346,7 +393,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
                 break;
             case VanishType.DIED:
                 var isPC = Type == EntityType.PC;
-                ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Dead });
+                ChangeMotion(new MotionRequest { Motion = SpriteMotion.Dead });
                 if (!isPC) {
                     StartCoroutine(DestroyAfterSecondsWithFade());
                 }
@@ -386,13 +433,18 @@ public class Entity : MonoBehaviour, INetworkEntity {
         EntityViewer.Init(reloadSprites: true);
     }
 
-    public void ChangeMotion(EntityViewer.MotionRequest motion, EntityViewer.MotionRequest? nextMotion = null) {
+    public void ChangeMotion(MotionRequest motion, MotionRequest? nextMotion = null) {
         EntityViewer.ChangeMotion(motion, nextMotion);
     }
 
     public void UpdateHitPoints(int hp, int maxHp) {
         Status.hp = hp;
         Status.max_hp = maxHp;
+
+        if (Type == EntityType.MOB && Status.hp != Status.max_hp) {
+            Canvas.ShowEntityHP();
+            Canvas.SetEntityHP(Status.hp, Status.max_hp);
+        }
     }
 
     public void StopMoving() {
@@ -423,7 +475,7 @@ public class Entity : MonoBehaviour, INetworkEntity {
     public void CastSkill(float delayTime, uint property) {
         PlayAudio("data/wav/effect/ef_beginspell.wav");
         CastingEffect.StartCasting(delayTime, "data/texture/effect/ring_yellow.png", gameObject);
-        ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Casting, delay = 0 });
+        ChangeMotion(new MotionRequest { Motion = SpriteMotion.Casting, delay = 0 });
     }
 
     public void PlayAudio(string path) {
@@ -440,10 +492,10 @@ public class Entity : MonoBehaviour, INetworkEntity {
             var srcEntity = EntityManager.GetEntity(NOTIFY_SKILL2.AID);
             var dstEntity = EntityManager.GetEntity(NOTIFY_SKILL2.targetID);
 
-            if (NOTIFY_SKILL2.AID == Session.CurrentSession.Entity.GetEntityGID() || NOTIFY_SKILL2.AID == Session.CurrentSession.AccountID) {
-                srcEntity = Session.CurrentSession.Entity as Entity;
-            } else if (NOTIFY_SKILL2.targetID == Session.CurrentSession.Entity.GetEntityGID() || NOTIFY_SKILL2.targetID == Session.CurrentSession.AccountID) {
-                dstEntity = Session.CurrentSession.Entity as Entity;
+            if (NOTIFY_SKILL2.AID == SessionManager.CurrentSession.Entity.GetEntityGID() || NOTIFY_SKILL2.AID == SessionManager.CurrentSession.AccountID) {
+                srcEntity = SessionManager.CurrentSession.Entity as Entity;
+            } else if (NOTIFY_SKILL2.targetID == SessionManager.CurrentSession.Entity.GetEntityGID() || NOTIFY_SKILL2.targetID == SessionManager.CurrentSession.AccountID) {
+                dstEntity = SessionManager.CurrentSession.Entity as Entity;
             }
 
             if (srcEntity != null) {
@@ -457,11 +509,11 @@ public class Entity : MonoBehaviour, INetworkEntity {
                 }
 
                 srcEntity.ChangeMotion(
-                    new EntityViewer.MotionRequest {
+                    new MotionRequest {
                         Motion = SpriteMotion.Attack2,
                         delay = 0
                     },
-                    new EntityViewer.MotionRequest {
+                    new MotionRequest {
                         Motion = SpriteMotion.Idle,
                         delay = 0
                     }
@@ -507,8 +559,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
 
         if (isAlive) {
             dstEntity.ChangeMotion(
-                new EntityViewer.MotionRequest { Motion = SpriteMotion.Hit, delay = 0 },
-                new EntityViewer.MotionRequest { Motion = SpriteMotion.Standby, delay = 0 }
+                new MotionRequest { Motion = SpriteMotion.Hit, delay = 0 },
+                new MotionRequest { Motion = SpriteMotion.Standby, delay = 0 }
             );
         }
     }
@@ -653,13 +705,13 @@ public class Entity : MonoBehaviour, INetworkEntity {
         if (actionRequest == null)
             return;
 
-        var srcEntity = EntityManager.GetEntity(actionRequest.GID);
-        var dstEntity = actionRequest.action != ActionRequestType.STAND && actionRequest.action != ActionRequestType.SIT ? EntityManager.GetEntity(actionRequest.targetGID) : null;
+        var srcEntity = EntityManager.GetEntity(actionRequest.AID);
+        var dstEntity = actionRequest.action != ActionRequestType.STAND && actionRequest.action != ActionRequestType.SIT ? EntityManager.GetEntity(actionRequest.targetAID) : null;
 
-        if (actionRequest.GID == Session.CurrentSession.Entity.GetEntityGID() || actionRequest.GID == Session.CurrentSession.AccountID) {
-            srcEntity = Session.CurrentSession.Entity as Entity;
-        } else if (actionRequest.targetGID == Session.CurrentSession.Entity.GetEntityGID() || actionRequest.targetGID == Session.CurrentSession.AccountID) {
-            dstEntity = Session.CurrentSession.Entity as Entity;
+        if (actionRequest.AID == SessionManager.CurrentSession.Entity.GetEntityGID() || actionRequest.AID == SessionManager.CurrentSession.AccountID) {
+            srcEntity = SessionManager.CurrentSession.Entity as Entity;
+        } else if (actionRequest.targetAID == SessionManager.CurrentSession.Entity.GetEntityGID() || actionRequest.targetAID == SessionManager.CurrentSession.AccountID) {
+            dstEntity = SessionManager.CurrentSession.Entity as Entity;
         }
 
         // entity out of screen
@@ -698,15 +750,15 @@ public class Entity : MonoBehaviour, INetworkEntity {
     }
 
     private void OnEntityStand(Entity srcEntity) {
-        srcEntity.ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Idle });
+        srcEntity.ChangeMotion(new MotionRequest { Motion = SpriteMotion.Idle });
     }
 
     private void OnEntitySit(Entity srcEntity) {
-        srcEntity.ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Sit });
+        srcEntity.ChangeMotion(new MotionRequest { Motion = SpriteMotion.Sit });
     }
 
     private void OnEntityPickup(Entity srcEntity, Entity dstEntity) {
-        srcEntity.ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.PickUp }, new EntityViewer.MotionRequest { Motion = SpriteMotion.Idle });
+        srcEntity.ChangeMotion(new MotionRequest { Motion = SpriteMotion.PickUp }, new MotionRequest { Motion = SpriteMotion.Idle });
         if (dstEntity) {
             srcEntity.LookTo(dstEntity.transform.position);
         }
@@ -721,8 +773,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
                 pkt.action != ActionRequestType.ATTACK_MULTIPLE_NOMOTION &&
                 pkt.action != ActionRequestType.ATTACK_NOMOTION) {
                 dstEntity.ChangeMotion(
-                    new EntityViewer.MotionRequest { Motion = SpriteMotion.Hit, delay = GameManager.Tick + pkt.sourceSpeed },
-                    new EntityViewer.MotionRequest { Motion = SpriteMotion.Standby, delay = GameManager.Tick + pkt.sourceSpeed * 2 }
+                    new MotionRequest { Motion = SpriteMotion.Hit, delay = GameManager.Tick + pkt.sourceSpeed },
+                    new MotionRequest { Motion = SpriteMotion.Standby, delay = GameManager.Tick + pkt.sourceSpeed * 2 }
                     );
             }
 
@@ -766,8 +818,8 @@ public class Entity : MonoBehaviour, INetworkEntity {
 
         srcEntity.SetAttackSpeed(pkt.sourceSpeed);
         srcEntity.ChangeMotion(
-            new EntityViewer.MotionRequest { Motion = SpriteMotion.Attack },
-            new EntityViewer.MotionRequest { Motion = SpriteMotion.Standby, delay = GameManager.Tick + pkt.sourceSpeed }
+            new MotionRequest { Motion = SpriteMotion.Attack },
+            new MotionRequest { Motion = SpriteMotion.Standby, delay = GameManager.Tick + pkt.sourceSpeed }
         );
         srcEntity.SetAttackSpeed(pkt.sourceSpeed);
     }
@@ -825,13 +877,28 @@ public class Entity : MonoBehaviour, INetworkEntity {
         return Type;
     }
 
+    int INetworkEntity.GetEntityGID() {
+        throw new NotImplementedException();
+    }
+
+    public int GetEntityAID() {
+        throw new NotImplementedException();
+    }
+
+    public string GetEntityName() {
+        throw new NotImplementedException();
+    }
+
+    int INetworkEntity.GetEntityType() {
+        throw new NotImplementedException();
+    }
+
     public uint GetEntityGID() {
         return GID;
     }
 
     public void SetAttackSpeed(ushort speed) {
         Status.attackSpeed = speed;
-        EntityViewer.SetMotionSpeedMultipler(speed);
     }
 
     public EntityBaseStatus GetBaseStatus() {
@@ -843,11 +910,13 @@ public class Entity : MonoBehaviour, INetworkEntity {
             return;
         }
 
-        MaybeInitLayer(gameObject.layer, EntityViewer, EquipInfo.Weapon, ViewerType.WEAPON);
-        MaybeInitLayer(gameObject.layer, EntityViewer, EquipInfo.Shield, ViewerType.SHIELD);
-        MaybeInitLayer(gameObject.layer, EntityViewer, EquipInfo.HeadTop, ViewerType.HEAD_TOP);
-        MaybeInitLayer(gameObject.layer, EntityViewer, EquipInfo.HeadMid, ViewerType.HEAD_MID);
-        MaybeInitLayer(gameObject.layer, EntityViewer, EquipInfo.HeadBottom, ViewerType.HEAD_BOTTOM);
+        if (EntityViewer is SpriteEntityViewer SpriteViewer) {
+            MaybeInitLayer(gameObject.layer, SpriteViewer, EquipInfo.Weapon, ViewerType.WEAPON);
+            MaybeInitLayer(gameObject.layer, SpriteViewer, EquipInfo.Shield, ViewerType.SHIELD);
+            MaybeInitLayer(gameObject.layer, SpriteViewer, EquipInfo.HeadTop, ViewerType.HEAD_TOP);
+            MaybeInitLayer(gameObject.layer, SpriteViewer, EquipInfo.HeadMid, ViewerType.HEAD_MID);
+            MaybeInitLayer(gameObject.layer, SpriteViewer, EquipInfo.HeadBottom, ViewerType.HEAD_BOTTOM);
+        }
         EntityViewer.Init(reloadSprites: true);
     }
 

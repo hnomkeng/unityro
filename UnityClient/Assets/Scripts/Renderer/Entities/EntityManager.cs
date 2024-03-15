@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.Rendering;
+using UnityRO.Core.GameEntity;
 using static ZC.NOTIFY_VANISH;
 
 public class EntityManager : MonoBehaviour {
@@ -19,7 +20,7 @@ public class EntityManager : MonoBehaviour {
     }
 
     public Entity Spawn(EntitySpawnData data) {
-        switch (data.objecttype) {
+        switch ((EntityType)data.objecttype) {
             case EntityType.PC:
                 entityCache.TryGetValue(data.AID, out var pc);
                 pc?.gameObject.SetActive(true);
@@ -63,12 +64,13 @@ public class EntityManager : MonoBehaviour {
         entityCache.Remove(AID);
     }
 
-    public async Task<Entity> SpawnItem(ItemSpawnInfo itemSpawnInfo) {
+    public Entity SpawnItem(ItemSpawnInfo itemSpawnInfo) {
 
         Item item = DBManager.GetItem(itemSpawnInfo.AID);
         string itemPath = DBManager.GetItemPath(itemSpawnInfo.AID, itemSpawnInfo.IsIdentified);
 
-        SpriteData spriteData = await Addressables.LoadAssetAsync<SpriteData>($"{itemPath}.asset".SanitizeForAddressables()).Task;
+        SpriteData spriteData = Addressables.LoadAssetAsync<SpriteData>($"{itemPath}.asset".SanitizeForAddressables()).WaitForCompletion();
+        Texture2D atlas = Addressables.LoadAssetAsync<Texture2D>($"{itemPath}.png".SanitizeForAddressables()).WaitForCompletion();
 
         var itemGO = new GameObject(item.identifiedDisplayName);
         itemGO.layer = LayerMask.NameToLayer("Items");
@@ -88,7 +90,7 @@ public class EntityManager : MonoBehaviour {
             animator.runtimeAnimatorController = Instantiate(Resources.Load("Animations/ItemDropAnimator")) as RuntimeAnimatorController;
         }
 
-        var bodyViewer = body.AddComponent<EntityViewer>();
+        var bodyViewer = body.AddComponent<SpriteEntityViewer>();
 
         entity.EntityViewer = bodyViewer;
         entity.Type = EntityType.ITEM;
@@ -98,7 +100,7 @@ public class EntityManager : MonoBehaviour {
         bodyViewer.Entity = entity;
         bodyViewer.HeadDirection = 0;
 
-        entity.Init(spriteData);
+        entity.Init(spriteData, atlas);
         entity.AID = (uint) itemSpawnInfo.mapID;
         entityCache.Add(entity.AID, entity);
         entity.SetReady(true);
@@ -114,7 +116,7 @@ public class EntityManager : MonoBehaviour {
         player.transform.localScale = Vector3.one;
 
         var entity = player.AddComponent<Entity>();
-
+        entity.EntityViewerType = DBManager.GetEntityViewerType(data.job);
         entityCache.Add(data.AID, entity);
         entity.Init(data, layer, canvas);
 
@@ -128,6 +130,7 @@ public class EntityManager : MonoBehaviour {
         npc.layer = layer;
         npc.transform.localScale = Vector3.one;
         var entity = npc.AddComponent<Entity>();
+        entity.EntityViewerType = DBManager.GetEntityViewerType(data.job);
 
         entityCache.Add(data.AID, entity);
         entity.Init(data, layer, canvas);
@@ -142,6 +145,7 @@ public class EntityManager : MonoBehaviour {
         mob.layer = layer;
         mob.transform.localScale = Vector3.one;
         var entity = mob.AddComponent<Entity>();
+        entity.EntityViewerType = DBManager.GetEntityViewerType(data.job);
 
         entityCache.Add(data.AID, entity);
         entity.Init(data, layer, canvas);
@@ -156,6 +160,7 @@ public class EntityManager : MonoBehaviour {
         player.layer = layer;
         player.transform.localScale = Vector3.one;
         var entity = player.AddComponent<Entity>();
+        entity.EntityViewerType = DBManager.GetEntityViewerType(data.Job);
         entity.Init(data, layer, canvas);
 
         var controller = player.AddComponent<EntityControl>();

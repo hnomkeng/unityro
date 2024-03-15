@@ -76,7 +76,7 @@ public class EntityWalk : MonoBehaviour {
         if (packet is ZC.NOTIFY_PLAYERMOVE) {
             var pkt = packet as ZC.NOTIFY_PLAYERMOVE;
 
-            StartMoving(pkt.startPosition[0], pkt.startPosition[1], pkt.endPosition[0], pkt.endPosition[1]);
+            StartMoving(pkt.StartPosition[0], pkt.StartPosition[1], pkt.EndPosition[0], pkt.EndPosition[1]);
         }
     }
 
@@ -90,7 +90,7 @@ public class EntityWalk : MonoBehaviour {
         nodes = PathFinder.GetPath(startX, startY, endX, endY).Select(node => new Vector3(node.x, (float) node.y, node.z)).ToList();
 
         if (!nodes.IsEmpty()) {
-            Entity.ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Walk });
+            Entity.ChangeMotion(new MotionRequest { Motion = SpriteMotion.Walk });
             isWalking = true;
         }
 
@@ -98,7 +98,7 @@ public class EntityWalk : MonoBehaviour {
     }
 
     public void StopMoving() {
-        Entity.ChangeMotion(new EntityViewer.MotionRequest { Motion = SpriteMotion.Idle });
+        Entity.ChangeMotion(new MotionRequest { Motion = SpriteMotion.Idle });
         isWalking = false;
         nodes?.Clear();
     }

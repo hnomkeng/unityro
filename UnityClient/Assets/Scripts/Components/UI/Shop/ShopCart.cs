@@ -29,12 +29,17 @@ public class ShopCart : MonoBehaviour, IDropHandler {
     [SerializeField]
     private Button CancelButton;
 
+    [SerializeField]
+    private Toggle IgnoreQuantityToggle;
+
     private List<CartItem> CurrentCartItems;
     private NpcShopType ShopType;
     private NumberInput QuantityInput;
 
     internal void SetShopType(NpcShopType shopType) {
         ShopType = shopType;
+        SubmitButton.gameObject.GetComponentInChildren<TextMeshProUGUI>().text = ShopType == NpcShopType.BUY ? "Buy" : "Sell";
+        IgnoreQuantityToggle.gameObject.SetActive(ShopType == NpcShopType.SELL);
     }
 
     private int TotalPrice => CurrentCartItems.Sum(it => it.ItemShopInfo.specialPrice * it.Quantity);
@@ -50,36 +55,42 @@ public class ShopCart : MonoBehaviour, IDropHandler {
 
     public async void OnDrop(PointerEventData eventData) {
         var droppedItem = eventData.pointerDrag?.GetComponent<ShopItem>();
-        var entity = Session.CurrentSession.Entity as Entity;
         if (droppedItem != null) {
-
-            var cartItem = CurrentCartItems.FirstOrDefault(it => it.ItemShopInfo.itemID == droppedItem.ItemShopInfo.itemID);
-            var itemType = (ItemType) droppedItem.ItemShopInfo.type;
-            var isStackable = itemType != ItemType.WEAPON &&
-                itemType != ItemType.EQUIP &&
-                itemType != ItemType.PETEGG &&
-                itemType != ItemType.PETEQUIP;
-
-            if (isStackable) {
-                if (ShopType == NpcShopType.BUY) {
-                    await ProcessBuyStackable(droppedItem, entity, cartItem);
-                } else if (ShopType == NpcShopType.SELL) {
-                    await ProcessSellStackable(droppedItem, cartItem);
-                }
-            } else {
-                if (cartItem == null) {
-                    AddItemToCart(droppedItem, 1);
-                }
-            }
-
-            // TODO: Check if there's only one item to buy or if we're selling with the select all toggle
+            await AddItem(droppedItem);
         }
     }
 
-    private async Task ProcessSellStackable(ShopItem droppedItem, CartItem cartItem) {
-        // TODO: consider sell all checkbox
-        var quantity = await FindQuantity(droppedItem);
-        Destroy(QuantityInput.gameObject);
+    public async Task AddItem(ShopItem droppedItem) {
+        var entity = Session.CurrentSession.Entity as Entity;
+        var cartItem = CurrentCartItems.FirstOrDefault(it => it.ItemShopInfo.itemID == droppedItem.ItemShopInfo.itemID);
+        var itemType = (ItemType) droppedItem.ItemShopInfo.type;
+        var isStackable = itemType != ItemType.WEAPON &&
+            itemType != ItemType.EQUIP &&
+            itemType != ItemType.PETEGG &&
+            itemType != ItemType.PETEQUIP;
+
+        if (isStackable) {
+            if (ShopType == NpcShopType.BUY) {
+                await ProcessBuyStackable(droppedItem, entity, cartItem);
+            } else if (ShopType == NpcShopType.SELL) {
+                await ProcessSellStackable(droppedItem, entity, cartItem);
+            }
+        } else {
+            if (cartItem == null) {
+                AddItemToCart(droppedItem, 1, isStackable);
+                SetPriceLabel();
+            }
+        }
+    }
+
+    private async Task ProcessSellStackable(ShopItem droppedItem, Entity entity, CartItem cartItem) {
+        var quantity = 0;
+        if (IgnoreQuantityToggle.isOn) {
+            quantity = entity.Inventory.ItemList.First(it => it.ItemID == droppedItem.Item.id).amount;
+        } else {
+            quantity = await FindQuantity(droppedItem);
+            Destroy(QuantityInput.gameObject);
+        }
 
         var updatedQuantity = (cartItem?.Quantity ?? 0) + quantity;
         if (updatedQuantity > droppedItem.Quantity) {
@@ -95,17 +106,8 @@ public class ShopCart : MonoBehaviour, IDropHandler {
             cartItem.IncreaseQuantityBy(quantity);
             SetPriceLabel();
         } else {
-            AddItemToCart(droppedItem, quantity);
+            AddItemToCart(droppedItem, quantity, true);
         }
-    }
-
-    private async Task<int> FindQuantity(ShopItem droppedItem) {
-        QuantityInput = Instantiate(QuantityInputPrefab);
-        QuantityInput.transform.SetParent(gameObject.transform);
-        QuantityInput.SetTitle(droppedItem.GetItemName(), 1);
-        var quantity = await QuantityInput.AwaitConfirmation();
-
-        return quantity;
     }
 
     private async Task ProcessBuyStackable(ShopItem droppedItem, Entity entity, CartItem cartItem) {
@@ -121,15 +123,24 @@ public class ShopCart : MonoBehaviour, IDropHandler {
             cartItem.IncreaseQuantityBy(quantity);
             SetPriceLabel();
         } else {
-            AddItemToCart(droppedItem, quantity);
+            AddItemToCart(droppedItem, quantity, true);
+            SetPriceLabel();
         }
     }
 
-    private void AddItemToCart(ShopItem droppedItem, int quantity) {
+    private async Task<int> FindQuantity(ShopItem droppedItem) {
+        QuantityInput = Instantiate(QuantityInputPrefab);
+        QuantityInput.transform.SetParent(gameObject.transform, false);
+        QuantityInput.SetTitle(droppedItem.GetItemName(), 1);
+        var quantity = await QuantityInput.AwaitConfirmation();
+
+        return quantity;
+    }
+
+    private void AddItemToCart(ShopItem droppedItem, int quantity, bool isStackable) {
         var shopItem = Instantiate(ShopItemPrefab, CartScrollView.transform);
-        shopItem.SetItemShopInfo(droppedItem.ItemShopInfo, quantity);
+        shopItem.SetItemShopInfo(droppedItem.ItemShopInfo, isStackable ? quantity : 1);
         CurrentCartItems.Add(shopItem);
-        SetPriceLabel();
     }
 
     public void Clear() {

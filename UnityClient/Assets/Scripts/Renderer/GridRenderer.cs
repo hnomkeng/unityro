@@ -1,5 +1,4 @@
-﻿using ROIO;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AddressableAssets;
 
 public class GridRenderer : MonoBehaviour {
@@ -32,14 +31,14 @@ public class GridRenderer : MonoBehaviour {
         LoadGridTexture();
     }
 
-    private async void Update() {
+    private void Update() {
         if (PathFinder == null) {
             PathFinder = FindObjectOfType<PathFinder>();
             return;
         }
 
         if (gridIcon == null) {
-            gridIcon = await Addressables.LoadAssetAsync<Texture2D>("data/texture/grid.png").Task;
+            gridIcon = Addressables.LoadAssetAsync<Texture2D>("data/texture/grid.png").WaitForCompletion();
         }
 
         var ray = GameManager.MainCamera.ScreenPointToRay(Input.mousePosition);
@@ -54,7 +53,6 @@ public class GridRenderer : MonoBehaviour {
         material.SetFloat("_Glossiness", 0f);
         material.mainTexture = gridIcon;
         material.color = Color.red;
-        material.name = "Cursor material";
         material.doubleSidedGI = false;
         material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
         material.enableInstancing = false;
