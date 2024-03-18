@@ -510,7 +510,7 @@ public class DataUtility {
             "data/luafiles514/lua files/datainfo/LapineUpgradeBox.lub",
             "data/luafiles514/lua files/transparentItem/transparentItem.lub",
             "data/luafiles514/lua files/transparentItem/transparentItem_f.lub",
-            "data/luafiles514/lua files/service_brazil/ExternalSettings_br.lub",
+            "data/luafiles514/lua files/service_korea/externalsettings_kr.lub",
             "data/luafiles514/lua files/datainfo/TB_Layer_Priority.lub",
             "data/luafiles514/lua files/datainfo/tb_cashshop_banner.lub",
             "mapInfo_true.lub",

@@ -330,7 +330,7 @@ MonoBehaviour:
     - DataTables
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1b9401ec2cb2f304a9a3d64e6a96d69a
-    m_Address: lua/data/luafiles514/lua files/service_brazil/ExternalSettings_br.lub.txt
+    m_Address: lua/data/luafiles514/lua files/service_korea/externalsettings_kr.lub.txt
     m_ReadOnly: 0
     m_SerializedLabels:
     - DataTables
