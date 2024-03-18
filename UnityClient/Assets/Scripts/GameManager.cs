@@ -188,7 +188,7 @@ public class GameManager : MonoBehaviour {
 
 #if UNITY_EDITOR
         if (LocalHost) {
-            RemoteConfiguration.loginServer = "127.0.0.1";
+            RemoteConfiguration.loginServer = "103.245.167.103";
         }
 #endif
     }
